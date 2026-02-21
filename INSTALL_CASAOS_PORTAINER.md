@@ -1,4 +1,4 @@
-# Install on CasaOS via Portainer (portioner.io/portainer.io)
+# Install on CasaOS via Portainer (portainer.io)
 
 This project includes a ready-to-deploy stack file:
 
@@ -18,7 +18,10 @@ From SSH on your CasaOS machine:
 
 ```bash
 cd /DATA/AppData
-git clone https://github.com/iansutherland74/symlink-editor.git
+mkdir -p symlink-editor
+cd symlink-editor
+# copy this repository here (git clone or upload files)
+```
 
 You should end up with files like:
 
@@ -35,7 +38,7 @@ You should end up with files like:
 
 ## 3) Open the app
 
-- Visit: `http://<CASAOS_IP>:8080`
+- Visit: `http://192.168.1.14:9090`
 
 The web app will browse and manage symlinks under mounted paths (including `/DATA`).
 
@@ -44,11 +47,11 @@ The web app will browse and manage symlinks under mounted paths (including `/DAT
 - Change startup folder by editing env var in stack:
   - `SYMLINK_EDITOR_START_DIR=/DATA`
 - Change exposed port by editing:
-  - `"8080:8080"`
+  - `"192.168.1.14:9090:8080"` (default in this repo)
   - and command `--port 8080`
 
 ## Troubleshooting
 
-- If port 8080 is already in use, switch to another port (for example `8088:8080`).
+- If `192.168.1.14:9090` is already in use or unavailable on your host, change the mapping to your host IP/port (for example `192.168.1.14:9091:8080` or `0.0.0.0:9090:8080`).
 - If you cannot see files, verify host paths are mounted in the stack volumes.
 - If the container fails to start, check **Portainer → Containers → Logs**.
