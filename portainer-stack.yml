@@ -1,0 +1,15 @@
+services:
+  symlink-editor-web:
+    image: python:3.11-slim
+    container_name: symlink-editor-web
+    working_dir: /app
+    command: ["python3", "/app/symlink-editor-web", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "192.168.1.14:9090:8080"
+    environment:
+      - SYMLINK_EDITOR_START_DIR=/DATA
+      - PORT=8080
+    volumes:
+      - ./:/app:ro
+      - /DATA:/DATA
+    restart: unless-stopped
