@@ -18,10 +18,7 @@ From SSH on your CasaOS machine:
 
 ```bash
 cd /DATA/AppData
-mkdir -p symlink-editor
-cd symlink-editor
-# copy this repository here (git clone or upload files)
-```
+git clone https://github.com/iansutherland74/symlink-editor.git
 
 You should end up with files like:
 
