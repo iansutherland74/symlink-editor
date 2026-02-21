@@ -61,6 +61,17 @@ The web UI lets you:
 - edit symlink targets
 - delete symlinks
 
+
+### Install on CasaOS using Portainer
+
+Use the provided install stack file:
+
+- `portainer-stack.yml`
+
+Detailed steps are documented in:
+
+- `INSTALL_CASAOS_PORTAINER.md`
+
 Symlink Editor now works better in CasaOS/containerized environments:
 
 - If `$HOME` is missing or unusual, the app now falls back safely instead of using an invalid path.
