@@ -41,3 +41,47 @@ options:
 
 ## Development
 * Because the GTK widgets are defined in Python code in one giant file, the code is not readable by mortal eyes. But it *is* technically being maintained as of 2022. Pull requests are welcome, but beware :)
+
+## CasaOS notes
+
+
+### Run in a web browser (CasaOS)
+
+For CasaOS or any headless/container host, use the web UI entrypoint:
+
+```bash
+./symlink-editor-web --host 0.0.0.0 --port 8080
+```
+
+Then open `http://<host>:8080` in your browser.
+
+The web UI lets you:
+- browse directories
+- create symlinks
+- edit symlink targets
+- delete symlinks
+
+
+### Install on CasaOS using Portainer
+
+The provided stack publishes to **192.168.1.14:9090** by default.
+
+Use the provided install stack file:
+
+- `portainer-stack.yml`
+
+Detailed steps are documented in:
+
+- `INSTALL_CASAOS_PORTAINER.md`
+
+Symlink Editor now works better in CasaOS/containerized environments:
+
+- If `$HOME` is missing or unusual, the app now falls back safely instead of using an invalid path.
+- Startup directory detection now prefers (in order): `-dir`, `SYMLINK_EDITOR_START_DIR`, `~/Bookmarks`, `/DATA` (CasaOS default mount), then `/`.
+- "File Manager" now tries `xdg-open`, then `gio open`, then `open` for broader desktop compatibility.
+
+If you want a specific startup folder in CasaOS, set:
+
+```bash
+export SYMLINK_EDITOR_START_DIR=/DATA
+```

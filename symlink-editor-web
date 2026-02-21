@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Web UI for Symlink Editor (CasaOS-friendly)."""
+
+import argparse
+import html
+import os
+import posixpath
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+HOME = os.getenv("HOME") or os.path.expanduser("~")
+DEFAULTPATH = f"{HOME}/Bookmarks"
+CASAOS_DATA_PATH = "/DATA"
+
+
+def get_default_start_path(preferred_path=None):
+    candidates = [
+        preferred_path,
+        os.getenv("SYMLINK_EDITOR_START_DIR"),
+        DEFAULTPATH,
+        CASAOS_DATA_PATH,
+        HOME,
+        "/",
+    ]
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return "/"
+
+
+def safe_join(base_dir, name):
+    target = os.path.normpath(os.path.join(base_dir, name))
+    if os.path.dirname(target) != os.path.normpath(base_dir):
+        raise ValueError("Path traversal is not allowed")
+    return target
+
+
+def render_page(current_dir, message=""):
+    rows = []
+    if os.path.dirname(current_dir) != current_dir:
+        up = urllib.parse.quote(os.path.dirname(current_dir), safe="/")
+        rows.append(f"<li><a href='/?dir={up}'>⬆️ Parent directory</a></li>")
+
+    try:
+        entries = sorted(os.listdir(current_dir))
+    except OSError as exc:
+        return page_template(current_dir, message=f"Could not list directory: {html.escape(str(exc))}", items="")
+
+    for name in entries:
+        full = os.path.join(current_dir, name)
+        if os.path.isdir(full) and not os.path.islink(full):
+            quoted = urllib.parse.quote(full, safe="/")
+            rows.append(f"<li>📁 <a href='/?dir={quoted}'>{html.escape(name)}</a></li>")
+        elif os.path.islink(full):
+            target = os.readlink(full)
+            exists = os.path.exists(full)
+            target_display = html.escape(target)
+            status = "✅" if exists else "❌"
+            rows.append(
+                "<li>🔗 <b>{}</b> {} {} "
+                "<form method='post' style='display:inline'>"
+                "<input type='hidden' name='action' value='delete'>"
+                "<input type='hidden' name='dir' value='{}'>"
+                "<input type='hidden' name='name' value='{}'>"
+                "<button type='submit'>Delete</button></form></li>".format(
+                    html.escape(name), status, target_display,
+                    html.escape(current_dir), html.escape(name)
+                )
+            )
+
+    return page_template(current_dir, message=message, items="\n".join(rows))
+
+
+def page_template(current_dir, message, items):
+    escaped_dir = html.escape(current_dir)
+    escaped_message = html.escape(message)
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset='utf-8'>
+<title>Symlink Editor (Web)</title>
+<style>
+body {{ font-family: sans-serif; max-width: 900px; margin: 20px auto; }}
+code {{ background: #f1f1f1; padding: 2px 5px; }}
+input[type=text] {{ width: 100%; padding: 8px; margin: 4px 0; box-sizing: border-box; }}
+button {{ padding: 6px 10px; }}
+.notice {{ color: #055; background: #eef; padding: 8px; }}
+.warn {{ color: #700; background: #fee; padding: 8px; }}
+</style>
+</head>
+<body>
+<h1>Symlink Editor (Web)</h1>
+<p>Current directory: <code>{escaped_dir}</code></p>
+{'<p class="notice">'+escaped_message+'</p>' if escaped_message else ''}
+<h2>Browse</h2>
+<ul>
+{items}
+</ul>
+<h2>Create symlink</h2>
+<form method='post'>
+<input type='hidden' name='action' value='create'>
+<input type='hidden' name='dir' value='{escaped_dir}'>
+<label>Name</label>
+<input type='text' name='name' placeholder='my-link'>
+<label>Target</label>
+<input type='text' name='target' placeholder='/path/to/target'>
+<button type='submit'>Create</button>
+</form>
+<h2>Edit symlink target</h2>
+<form method='post'>
+<input type='hidden' name='action' value='edit'>
+<input type='hidden' name='dir' value='{escaped_dir}'>
+<label>Name</label>
+<input type='text' name='name' placeholder='existing-link'>
+<label>New target</label>
+<input type='text' name='target' placeholder='/new/path'>
+<button type='submit'>Update target</button>
+</form>
+</body>
+</html>
+"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        current_dir = get_default_start_path(query.get("dir", [None])[0])
+        body = render_page(current_dir)
+        self.respond(body)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        data = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
+        action = data.get("action", [""])[0]
+        current_dir = get_default_start_path(data.get("dir", [None])[0])
+        name = data.get("name", [""])[0].strip()
+        target = data.get("target", [""])[0].strip()
+        message = ""
+        try:
+            if not name:
+                raise ValueError("Name is required")
+            path = safe_join(current_dir, name)
+            if action == "create":
+                if not target:
+                    raise ValueError("Target is required")
+                os.symlink(target, path)
+                message = f"Created symlink: {name} -> {target}"
+            elif action == "edit":
+                if not os.path.islink(path):
+                    raise ValueError("Selected name is not an existing symlink")
+                if not target:
+                    raise ValueError("New target is required")
+                os.remove(path)
+                os.symlink(target, path)
+                message = f"Updated symlink: {name} -> {target}"
+            elif action == "delete":
+                if not os.path.islink(path):
+                    raise ValueError("Selected name is not an existing symlink")
+                os.remove(path)
+                message = f"Deleted symlink: {name}"
+            else:
+                raise ValueError("Unknown action")
+        except Exception as exc:
+            message = f"Error: {exc}"
+
+        self.respond(render_page(current_dir, message=message))
+
+    def log_message(self, fmt, *args):
+        return
+
+    def respond(self, body):
+        encoded = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run Symlink Editor in a web browser")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", default=int(os.getenv("PORT", "8080")), type=int)
+    args = parser.parse_args()
+
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    print(f"Symlink Editor web running on http://{args.host}:{args.port}")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

@@ -24,6 +24,7 @@ For commandline options try 'symlink-editor --help'
 
 import argparse
 import os
+import shutil
 import stat
 import signal
 from tempfile import gettempdir
@@ -36,7 +37,8 @@ except ModuleNotFoundError:
     print('You need to install python3 gtk3 bindings (python3-gi)')
     quit(1)
 
-HOME = os.getenv("HOME")
+HOME = os.getenv("HOME") or os.path.expanduser("~")
+CASAOS_DATA_PATH = '/DATA'
 DEFAULTPATH = '%s/Bookmarks' % HOME
 SRCPATH = "%s-src" % os.path.realpath(__file__)
 FOLDER = "%s/folder.png" % SRCPATH
@@ -48,6 +50,24 @@ This could be because a file with that name already exists,
 you don't have write permission, a file changed while you
 were editing it, or the path contains a directory that does
 not exist.'''
+
+
+def get_default_start_path(preferred_path=None):
+    """Return the most practical initial folder for this environment."""
+    candidates = []
+    if preferred_path:
+        candidates.append(preferred_path)
+    candidates.extend([
+        os.getenv('SYMLINK_EDITOR_START_DIR'),
+        DEFAULTPATH,
+        CASAOS_DATA_PATH,
+        HOME,
+        '/',
+    ])
+    for path in candidates:
+        if path and os.path.isdir(path):
+            return path
+    return '/'
 
 # TODO:
 # give more specific OS error messages
@@ -489,7 +509,16 @@ class MainWindow(Gtk.Window):
             window.destroy()
 
 def openFm():
-    call('xdg-open %s' % PWD,shell=True)
+    available_commands = [
+        ('xdg-open', PWD),
+        ('gio', 'open', PWD),
+        ('open', PWD),
+    ]
+    for command in available_commands:
+        if shutil.which(command[0]):
+            call(command)
+            return
+    oopsWindow('Could not find a compatible file manager command (xdg-open/gio/open).')
 
 def main():
     global PWD
@@ -500,12 +529,7 @@ def main():
     parser.add_argument('-dir', help='start in this path instead of the default', default=DEFAULTPATH)
     parser.add_argument('-leaveopen', help='leave main window open after editing', action='store_true')
     arg = vars(parser.parse_args()) # return arguments as a dictionary
-    if os.path.isdir(arg['dir']):
-        PWD = arg['dir']
-    elif os.path.isdir(DEFAULTPATH):
-        PWD = DEFAULTPATH
-    else:
-        PWD = HOME
+    PWD = get_default_start_path(arg['dir'])
 
 
     window = MainWindow()
@@ -547,4 +571,3 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         quit()
-
